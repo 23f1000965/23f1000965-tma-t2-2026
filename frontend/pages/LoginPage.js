@@ -55,7 +55,11 @@ const LoginPage = {
 
                 if (response.ok) {
                     this.$root.login(data.role, data.access_token);
-                    this.$router.push("/");
+                    if (data.role === "ADMIN") {
+                        this.$router.push("/admin/dashboard");
+                    } else {
+                        this.$router.push("/");
+                    }
                 } else {
                     this.errorMsg = data.message || "Invalid email or password.";
                 }

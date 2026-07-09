@@ -16,6 +16,9 @@ const Navbar = {
                         <li class="nav-item">
                             <router-link class="nav-link" to="/">Home</router-link>
                         </li>
+                        <li class="nav-item" v-if="isAuthenticated && userRole === 'ADMIN'">
+                            <router-link class="nav-link" to="/admin/dashboard">Admin Dashboard</router-link>
+                        </li>
                     </ul>
                     <!-- Authenticated View -->
                     <div class="d-flex align-items-center" v-if="isAuthenticated">
