@@ -53,8 +53,22 @@ def admin_required():
     return wrapper
 
 
-# ---- Authentication Routes ----
+# ---- Decorator to enforce Staff-only route access ----
+def staff_required():
+    def wrapper(fn):
+        @wraps(fn)
+        def decorator(*args, **kwargs):
+            verify_jwt_in_request()
+            claims = get_jwt()
+            if claims.get("role") != "STAFF":
+                return jsonify({"message": "Staff access required"}), 403
+            return fn(*args, **kwargs)
+        return decorator
+    return wrapper
 
+
+# ---- Authentication Routes ----
+#trekker register
 @app.route("/api/auth/register", methods=["POST"])
 def register():
     data = request.get_json() or {}
@@ -88,7 +102,7 @@ def register():
 
     return jsonify({"message": "Registration successful"}), 201
 
-
+#login for all users (Admin, Staff, Trekker)
 @app.route("/api/auth/login", methods=["POST"])
 def login():
     data = request.get_json() or {}
@@ -117,7 +131,7 @@ def login():
         "name": user.name
     }), 200
 
-
+# user profile 
 @app.route("/api/auth/profile", methods=["GET"])
 @jwt_required()
 def profile():
@@ -138,8 +152,8 @@ def profile():
     }), 200
 
 
-# ---- Admin Management routes ----
-
+# ---- Admin Management Routes----
+# Admin dashboard stats 
 @app.route("/api/admin/dashboard-stats", methods=["GET"])
 @admin_required()
 def get_dashboard_stats():
@@ -155,14 +169,14 @@ def get_dashboard_stats():
         "total_bookings": total_bookings
     }), 200
 
-
+# admin get all treks 
 @app.route("/api/admin/treks", methods=["GET"])
 @admin_required()
 def list_treks():
     treks = Trek.query.all()
     return jsonify([trek.to_dict() for trek in treks]), 200
 
-
+# admin create new trek 
 @app.route("/api/admin/treks", methods=["POST"])
 @admin_required()
 def create_trek():
@@ -214,7 +228,7 @@ def create_trek():
 
     return jsonify({"message": "Trek created successfully", "trek": trek.to_dict()}), 201
 
-
+# admin get trek by id 
 @app.route("/api/admin/treks/<int:trek_id>", methods=["GET"])
 @admin_required()
 def get_trek(trek_id):
@@ -223,7 +237,7 @@ def get_trek(trek_id):
         return jsonify({"message": "Trek not found"}), 404
     return jsonify(trek.to_dict()), 200
 
-
+#admin update trek by id 
 @app.route("/api/admin/treks/<int:trek_id>", methods=["PUT"])
 @admin_required()
 def update_trek(trek_id):
@@ -273,7 +287,7 @@ def update_trek(trek_id):
     db.session.commit()
     return jsonify({"message": "Trek updated successfully", "trek": trek.to_dict()}), 200
 
-
+#admin delete trek by id 
 @app.route("/api/admin/treks/<int:trek_id>", methods=["DELETE"])
 @admin_required()
 def delete_trek(trek_id):
@@ -288,14 +302,14 @@ def delete_trek(trek_id):
     db.session.commit()
     return jsonify({"message": "Trek deleted successfully"}), 200
 
-
+# admin get staff management    
 @app.route("/api/admin/staff", methods=["GET"])
 @admin_required()
 def list_staff():
     staff = User.query.filter_by(role="STAFF").all()
     return jsonify([s.to_dict() for s in staff]), 200
 
-
+# admin create new staff 
 @app.route("/api/admin/staff", methods=["POST"])
 @admin_required()
 def create_staff():
@@ -325,7 +339,7 @@ def create_staff():
     db.session.commit()
     return jsonify({"message": "Staff member created successfully", "staff": staff.to_dict()}), 201
 
-
+# admin create assign staff to trek
 @app.route("/api/admin/treks/<int:trek_id>/assign-staff", methods=["POST"])
 @admin_required()
 def assign_staff_to_trek(trek_id):
@@ -359,14 +373,14 @@ def assign_staff_to_trek(trek_id):
     db.session.commit()
     return jsonify({"message": "Staff assigned to trek successfully", "trek": trek.to_dict()}), 200
 
-
+# admin get all trekkers
 @app.route("/api/admin/trekkers", methods=["GET"])
 @admin_required()
 def list_trekkers():
     trekkers = User.query.filter_by(role="USER").all()
     return jsonify([t.to_dict() for t in trekkers]), 200
 
-
+# admin toggle user status (activate/deactivate)
 @app.route("/api/admin/users/<int:user_id>/toggle-status", methods=["POST"])
 @admin_required()
 def toggle_user_status(user_id):
@@ -383,7 +397,7 @@ def toggle_user_status(user_id):
     status = "activated" if user.is_active else "deactivated"
     return jsonify({"message": f"User account has been {status}", "user": user.to_dict()}), 200
 
-
+# admin get all bookings
 @app.route("/api/admin/bookings", methods=["GET"])
 @admin_required()
 def list_bookings():
@@ -398,6 +412,82 @@ def list_bookings():
         b_dict["trek_name"] = trek.name if trek else "Unknown Trek"
         results.append(b_dict)
     return jsonify(results), 200
+
+
+# ---- Trek Staff Management Routes ----
+# Staff dashboard stats
+@app.route("/api/staff/treks", methods=["GET"])
+@staff_required()
+def staff_list_treks():
+    current_staff_id = get_jwt_identity()
+    # Find all treks assigned to this staff member
+    treks = Trek.query.filter_by(assigned_staff_id=current_staff_id).all()
+    
+    results = []
+    for trek in treks:
+        t_dict = trek.to_dict()
+        # Count active bookings for this trek
+        active_bookings_count = Booking.query.filter_by(trek_id=trek.id, status="BOOKED").count()
+        t_dict["bookings_count"] = active_bookings_count
+        results.append(t_dict)
+        
+    return jsonify(results), 200
+
+# Staff get participants of a specific trek
+@app.route("/api/staff/treks/<int:trek_id>/participants", methods=["GET"])
+@staff_required()
+def staff_get_trek_participants(trek_id):
+    current_staff_id = get_jwt_identity()
+    trek = Trek.query.filter_by(id=trek_id).first()
+    if not trek:
+        return jsonify({"message": "Trek not found"}), 404
+        
+    if trek.assigned_staff_id != current_staff_id:
+        return jsonify({"message": "Access denied: You are not assigned to this trek"}), 403
+        
+    bookings = Booking.query.filter_by(trek_id=trek_id).all()
+    results = []
+    for booking in bookings:
+        b_dict = booking.to_dict()
+        user = User.query.filter_by(id=booking.user_id).first()
+        b_dict["user_name"] = user.name if user else "Unknown User"
+        b_dict["user_email"] = user.email if user else "Unknown Email"
+        b_dict["user_contact"] = user.contact if user else ""
+        results.append(b_dict)
+        
+    return jsonify(results), 200
+
+# Staff update trek details slots and status
+@app.route("/api/staff/treks/<int:trek_id>", methods=["PUT"])
+@staff_required()
+def staff_update_trek(trek_id):
+    current_staff_id = get_jwt_identity()
+    trek = Trek.query.filter_by(id=trek_id).first()
+    if not trek:
+        return jsonify({"message": "Trek not found"}), 404
+        
+    if trek.assigned_staff_id != current_staff_id:
+        return jsonify({"message": "Access denied: You are not assigned to this trek"}), 403
+        
+    data = request.get_json() or {}
+    
+    if "available_slots" in data:
+        try:
+            slots = int(data["available_slots"])
+            if slots < 0:
+                return jsonify({"message": "Available slots cannot be negative"}), 400
+            trek.available_slots = slots
+        except ValueError:
+            return jsonify({"message": "Available slots must be a valid integer"}), 400
+            
+    if "status" in data:
+        status = data["status"]
+        if status not in ["OPEN", "CLOSED", "COMPLETED", "APPROVED", "PENDING"]:
+            return jsonify({"message": f"Invalid trek status: {status}"}), 400
+        trek.status = status
+        
+    db.session.commit()
+    return jsonify({"message": "Trek updated successfully", "trek": trek.to_dict()}), 200
 
 
 # ---- Frontend static view route ----

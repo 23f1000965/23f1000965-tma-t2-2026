@@ -57,6 +57,8 @@ const LoginPage = {
                     this.$root.login(data.role, data.access_token);
                     if (data.role === "ADMIN") {
                         this.$router.push("/admin/dashboard");
+                    } else if (data.role === "STAFF") {
+                        this.$router.push("/staff/dashboard");
                     } else {
                         this.$router.push("/");
                     }

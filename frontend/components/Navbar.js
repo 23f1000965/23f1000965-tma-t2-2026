@@ -4,7 +4,7 @@ const Navbar = {
         <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
             <div class="container">
                 <router-link class="navbar-brand" to="/">
-                    <i class="bi bi-mountain"></i> TMA
+                    <i class="bi bi-compass-fill"></i> TMA
                 </router-link>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
                         data-bs-target="#mainNav" aria-controls="mainNav"
@@ -18,6 +18,9 @@ const Navbar = {
                         </li>
                         <li class="nav-item" v-if="isAuthenticated && userRole === 'ADMIN'">
                             <router-link class="nav-link" to="/admin/dashboard">Admin Dashboard</router-link>
+                        </li>
+                        <li class="nav-item" v-if="isAuthenticated && userRole === 'STAFF'">
+                            <router-link class="nav-link" to="/staff/dashboard">Staff Dashboard</router-link>
                         </li>
                     </ul>
                     <!-- Authenticated View -->
