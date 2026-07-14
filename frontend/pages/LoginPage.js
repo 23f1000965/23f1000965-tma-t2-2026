@@ -60,7 +60,7 @@ const LoginPage = {
                     } else if (data.role === "STAFF") {
                         this.$router.push("/staff/dashboard");
                     } else {
-                        this.$router.push("/");
+                        this.$router.push("/trekker/dashboard");
                     }
                 } else {
                     this.errorMsg = data.message || "Invalid email or password.";

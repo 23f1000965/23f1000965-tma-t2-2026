@@ -3,6 +3,7 @@ import LoginPage from "../pages/LoginPage.js";
 import RegisterPage from "../pages/RegisterPage.js";
 import AdminDashboardPage from "../pages/AdminDashboardPage.js";
 import StaffDashboardPage from "../pages/StaffDashboardPage.js";
+import TrekkerDashboardPage from "../pages/TrekkerDashboardPage.js";
 
 const routes = [
     { path: "/", component: HomePage, name: "Home" },
@@ -10,6 +11,7 @@ const routes = [
     { path: "/register", component: RegisterPage, name: "Register" },
     { path: "/admin/dashboard", component: AdminDashboardPage, name: "AdminDashboard" },
     { path: "/staff/dashboard", component: StaffDashboardPage, name: "StaffDashboard" },
+    { path: "/trekker/dashboard", component: TrekkerDashboardPage, name: "TrekkerDashboard" },
 ];
 
 const router = VueRouter.createRouter({
@@ -32,6 +34,10 @@ router.beforeEach((to, from, next) => {
     }
 
     if (to.path.startsWith("/staff") && role !== "STAFF") {
+        return next("/");
+    }
+
+    if (to.path.startsWith("/trekker") && role !== "USER") {
         return next("/");
     }
 

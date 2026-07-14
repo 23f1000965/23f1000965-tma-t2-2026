@@ -1,6 +1,8 @@
 from datetime import datetime
 from functools import wraps
 from pathlib import Path
+import redis
+import json
 
 from flask import Flask, jsonify, render_template, request
 from flask_cors import CORS
@@ -26,17 +28,49 @@ app.config["SECRET_KEY"] = "trekking-management-system-secret-key-2026"
 app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{BASE_DIR / 'instance' / 'tma.sqlite3'}"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["JWT_SECRET_KEY"] = "super-secret-key-for-tms-jwt-authentication-2026"
+# Celery configuration
+app.config['CELERY_BROKER_URL'] = 'redis://localhost:6379/1'
+app.config['CELERY_RESULT_BACKEND'] = 'redis://localhost:6379/2'
+app.config['CELERY_TIMEZONE'] = 'Asia/Kolkata'
+app.config['BROKER_CONNECTION_RETRY_ON_STARTUP'] = True
+# Mail configuration 
+app.config['MAIL_SERVER'] = 'localhost'
+app.config['MAIL_PORT'] = 1025
+app.config['MAIL_DEFAULT_SENDER'] = 'noreply@trekkingmanagement.com'
 
 
 # Default Admin credentials
 app.config["ADMIN_EMAIL"] = "admin@gmail.com"
-app.config["ADMIN_PASSWORD"] = "Admin@123"
-app.config["ADMIN_NAME"] = "System Admin"
+app.config["ADMIN_PASSWORD"] = "admin@123"
+app.config["ADMIN_NAME"] = "Admin"
 
 # Initialize extensions
 db.init_app(app)
 CORS(app)
 JWTManager(app)
+
+# Initialize Redis client for caching
+redis_client = redis.Redis(host="localhost", port=6379, db=0, decode_responses=True)
+
+# Helper function to invalidate open treks cache
+def invalidate_treks_cache():
+    try:
+        keys = redis_client.keys("treks:*")
+        if keys:
+            redis_client.delete(*keys)
+    except Exception as e:
+        app.logger.error(f"Redis cache invalidation error: {str(e)}")
+
+# Event listeners to automatically invalidate cache on any DB change to Trek/Booking
+from sqlalchemy import event
+@event.listens_for(Trek, "after_insert")
+@event.listens_for(Trek, "after_update")
+@event.listens_for(Trek, "after_delete")
+@event.listens_for(Booking, "after_insert")
+@event.listens_for(Booking, "after_update")
+@event.listens_for(Booking, "after_delete")
+def handle_db_change(mapper, connection, target):
+    invalidate_treks_cache()
 
 
 # ---- Decorator to enforce Admin-only route access ----
@@ -62,6 +96,20 @@ def staff_required():
             claims = get_jwt()
             if claims.get("role") != "STAFF":
                 return jsonify({"message": "Staff access required"}), 403
+            return fn(*args, **kwargs)
+        return decorator
+    return wrapper
+
+
+# ---- Decorator to enforce Trekker-only route access ----
+def trekker_required():
+    def wrapper(fn):
+        @wraps(fn)
+        def decorator(*args, **kwargs):
+            verify_jwt_in_request()
+            claims = get_jwt()
+            if claims.get("role") != "USER":
+                return jsonify({"message": "Trekker access required"}), 403
             return fn(*args, **kwargs)
         return decorator
     return wrapper
@@ -121,8 +169,6 @@ def login():
     if not user.is_active:
         return jsonify({"message": "This account is deactivated"}), 403
 
-    if user.is_blacklisted:
-        return jsonify({"message": "This account is blacklisted"}), 403
 
     access_token = create_access_token(identity=user.id, additional_claims={"role": user.role})
     return jsonify({
@@ -132,13 +178,44 @@ def login():
     }), 200
 
 # user profile 
-@app.route("/api/auth/profile", methods=["GET"])
+@app.route("/api/auth/profile", methods=["GET", "PUT"])
 @jwt_required()
 def profile():
     current_user_id = get_jwt_identity()
     user = User.query.filter_by(id=current_user_id).first()
     if not user:
         return jsonify({"message": "User not found"}), 404
+
+    if request.method == "PUT":
+        data = request.get_json() or {}
+        name = data.get("name")
+        contact = data.get("contact")
+        password = data.get("password")
+
+        if "name" in data:
+            if not name or not name.strip():
+                return jsonify({"message": "Name cannot be empty"}), 400
+            user.name = name.strip()
+        
+        if "contact" in data:
+            user.contact = contact.strip() if contact else None
+
+        if "password" in data and password:
+            if len(password) < 6:
+                return jsonify({"message": "Password must be at least 6 characters"}), 400
+            user.password_hash = generate_password_hash(password)
+
+        db.session.commit()
+        return jsonify({
+            "message": "Profile updated successfully",
+            "user": {
+                "id": user.id,
+                "name": user.name,
+                "email": user.email,
+                "role": user.role,
+                "contact": user.contact
+            }
+        }), 200
 
     return jsonify({
         "id": user.id,
@@ -147,9 +224,9 @@ def profile():
         "role": user.role,
         "contact": user.contact,
         "is_active": user.is_active,
-        "is_blacklisted": user.is_blacklisted,
         "created_at": user.created_at.isoformat() if user.created_at else None
     }), 200
+
 
 
 # ---- Admin Management Routes----
@@ -397,6 +474,8 @@ def toggle_user_status(user_id):
     status = "activated" if user.is_active else "deactivated"
     return jsonify({"message": f"User account has been {status}", "user": user.to_dict()}), 200
 
+
+
 # admin get all bookings
 @app.route("/api/admin/bookings", methods=["GET"])
 @admin_required()
@@ -482,12 +561,229 @@ def staff_update_trek(trek_id):
             
     if "status" in data:
         status = data["status"]
-        if status not in ["OPEN", "CLOSED", "COMPLETED", "APPROVED", "PENDING"]:
+        if status not in ["OPEN", "CLOSED", "COMPLETED"]:
             return jsonify({"message": f"Invalid trek status: {status}"}), 400
+        
+        # If it was COMPLETED, but is being moved back to OPEN/CLOSED
+        if trek.status == "COMPLETED" and status != "COMPLETED":
+            completed_bookings = Booking.query.filter_by(trek_id=trek.id, status="COMPLETED").all()
+            for booking in completed_bookings:
+                booking.status = "BOOKED"
+        # If marked COMPLETED
+        elif status == "COMPLETED":
+            active_bookings = Booking.query.filter_by(trek_id=trek.id, status="BOOKED").all()
+            for booking in active_bookings:
+                booking.status = "COMPLETED"
+                
         trek.status = status
         
     db.session.commit()
     return jsonify({"message": "Trek updated successfully", "trek": trek.to_dict()}), 200
+
+
+# ---- User Booking & History Routes ----
+
+@app.route("/api/trekkers/treks", methods=["GET"])
+@trekker_required()
+def trekker_list_treks():
+    difficulty = request.args.get("difficulty")
+    location = request.args.get("location")
+    max_duration = request.args.get("max_duration")
+    
+    cache_key = f"treks:diff={difficulty or ''}:loc={location or ''}:dur={max_duration or ''}"
+    try:
+        cached_data = redis_client.get(cache_key)
+        if cached_data:
+            return jsonify(json.loads(cached_data)), 200
+    except Exception as e:
+        app.logger.error(f"Redis cache fetch error: {str(e)}")
+        
+    # We query only treks with status = 'OPEN'
+    query = Trek.query.filter_by(status="OPEN")
+    
+    if difficulty:
+        query = query.filter_by(difficulty=difficulty)
+    if location:
+        query = query.filter(Trek.location.ilike(f"%{location}%"))
+    if max_duration:
+        try:
+            max_days = int(max_duration)
+            query = query.filter(Trek.duration_days <= max_days)
+        except ValueError:
+            pass
+            
+    treks = query.all()
+    results = []
+    for trek in treks:
+        t_dict = trek.to_dict()
+        # Calculate slots remaining
+        booked_count = Booking.query.filter_by(trek_id=trek.id, status="BOOKED").count()
+        t_dict["slots_remaining"] = max(0, trek.available_slots - booked_count)
+        t_dict["bookings_count"] = booked_count
+        results.append(t_dict)
+        
+    try:
+        redis_client.setex(cache_key, 300, json.dumps(results)) # 5 min TTL
+    except Exception as e:
+        app.logger.error(f"Redis cache Write error: {str(e)}")
+        
+    return jsonify(results), 200
+
+
+@app.route("/api/trekkers/bookings", methods=["POST"])
+@trekker_required()
+def trekker_create_booking():
+    current_user_id = get_jwt_identity()
+    data = request.get_json() or {}
+    trek_id = data.get("trek_id")
+    
+    if not trek_id:
+        return jsonify({"message": "Trek ID is required"}), 400
+        
+    trek = Trek.query.filter_by(id=trek_id).first()
+    if not trek:
+        return jsonify({"message": "Trek not found"}), 404
+        
+    if trek.status != "OPEN":
+        return jsonify({"message": "This trek is not open for bookings"}), 400
+        
+    # Duplicate booking check: is there an active booking already?
+    existing_booking = Booking.query.filter_by(user_id=current_user_id, trek_id=trek_id).first()
+    if existing_booking:
+        if existing_booking.status == "BOOKED":
+            return jsonify({"message": "You have already booked this trek"}), 400
+        
+        # Reactivate cancelled booking
+        booked_count = Booking.query.filter_by(trek_id=trek_id, status="BOOKED").count()
+        if booked_count >= trek.available_slots:
+            return jsonify({"message": "No slots available. This trek is fully booked."}), 400
+            
+        existing_booking.status = "BOOKED"
+        existing_booking.booking_date = datetime.utcnow()
+        db.session.commit()
+        return jsonify({"message": "Booking successful", "booking": existing_booking.to_dict()}), 201
+        
+    # Overbooking prevention check
+    booked_count = Booking.query.filter_by(trek_id=trek_id, status="BOOKED").count()
+    if booked_count >= trek.available_slots:
+        return jsonify({"message": "No slots available. This trek is fully booked."}), 400
+        
+    # Create booking
+    booking = Booking(
+        user_id=current_user_id,
+        trek_id=trek_id,
+        status="BOOKED",
+        payment_status="NOT_REQUIRED"
+    )
+    db.session.add(booking)
+    db.session.commit()
+    
+    return jsonify({"message": "Booking successful", "booking": booking.to_dict()}), 201
+
+
+@app.route("/api/trekkers/bookings", methods=["GET"])
+@trekker_required()
+def trekker_list_bookings():
+    current_user_id = get_jwt_identity()
+    bookings = Booking.query.filter_by(user_id=current_user_id).all()
+    
+    results = []
+    for booking in bookings:
+        b_dict = booking.to_dict()
+        trek = Trek.query.filter_by(id=booking.trek_id).first()
+        if trek:
+            b_dict["trek_name"] = trek.name
+            b_dict["trek_location"] = trek.location
+            b_dict["trek_start_date"] = trek.start_date.isoformat()
+            b_dict["trek_end_date"] = trek.end_date.isoformat()
+            b_dict["trek_status"] = trek.status
+        else:
+            b_dict["trek_name"] = "Unknown Trek"
+            b_dict["trek_location"] = "Unknown"
+            b_dict["trek_status"] = ""
+
+            b_dict["trek_start_date"] = ""
+            b_dict["trek_end_date"] = ""
+        results.append(b_dict)
+        
+    return jsonify(results), 200
+
+
+@app.route("/api/trekkers/bookings/<int:booking_id>/cancel", methods=["POST"])
+@trekker_required()
+def trekker_cancel_booking(booking_id):
+    current_user_id = get_jwt_identity()
+    booking = Booking.query.filter_by(id=booking_id).first()
+    
+    if not booking:
+        return jsonify({"message": "Booking not found"}), 404
+        
+    if booking.user_id != current_user_id:
+        return jsonify({"message": "Access denied: This booking does not belong to you"}), 403
+        
+    if booking.status != "BOOKED":
+        return jsonify({"message": f"Cannot cancel booking in '{booking.status}' status"}), 400
+        
+    # Check if trek has started or is completed
+    trek = Trek.query.get(booking.trek_id)
+    if trek:
+        from datetime import date
+        if trek.status in ("COMPLETED", "CLOSED") or trek.start_date <= date.today():
+            return jsonify({"message": "Cannot cancel booking: The trek has already started, is closed, or is completed"}), 400
+
+        
+    booking.status = "CANCELLED"
+    db.session.commit()
+    
+    return jsonify({"message": "Booking cancelled successfully", "booking": booking.to_dict()}), 200
+
+
+
+# ---- Celery Tasks &  Export Routes ----
+
+@app.route("/api/trekkers/bookings/export", methods=["POST"])
+@trekker_required()
+def trekker_export_bookings():
+    current_user_id = get_jwt_identity()
+    from tasks import export_booking_history_csv
+    task = export_booking_history_csv.delay(current_user_id)
+    return jsonify({"task_id": task.id, "status": "PENDING"}), 202
+
+
+@app.route("/api/tasks/<task_id>/status", methods=["GET"])
+@jwt_required()
+def get_task_status(task_id):
+    from celery_app import celery
+    res = celery.AsyncResult(task_id)
+    if res.ready():
+        result_data = res.result
+        if isinstance(result_data, dict) and result_data.get("status") == "SUCCESS":
+            return jsonify({
+                "status": "SUCCESS",
+                "download_url": result_data.get("download_url")
+            }), 200
+        else:
+            return jsonify({
+                "status": "FAILED",
+                "message": result_data.get("message") if isinstance(result_data, dict) else str(result_data)
+            }), 200
+    return jsonify({"status": "PENDING"}), 200
+
+
+@app.route("/api/admin/trigger-daily-reminders", methods=["POST"])
+@admin_required()
+def trigger_daily_reminders():
+    from tasks import daily_reminder_job
+    task = daily_reminder_job.delay()
+    return jsonify({"message": "Daily reminders task triggered", "task_id": task.id}), 202
+
+
+@app.route("/api/admin/trigger-monthly-report", methods=["POST"])
+@admin_required()
+def trigger_monthly_report():
+    from tasks import monthly_report_job
+    task = monthly_report_job.delay()
+    return jsonify({"message": "Monthly report task triggered", "task_id": task.id}), 202
 
 
 # ---- Frontend static view route ----

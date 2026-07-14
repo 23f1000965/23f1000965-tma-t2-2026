@@ -93,9 +93,17 @@ export default {
                     <div class="tab-pane fade show active" id="treks" role="tabpanel">
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <h5 class="mb-0 fw-bold text-secondary">Trek Routes</h5>
-                            <button class="btn btn-primary btn-sm" @click="openTrekModal(null)">
-                                <i class="bi bi-plus-circle me-1"></i> Add New Trek
-                            </button>
+                            <div class="d-flex gap-2 w-50 justify-content-end">
+                                <input 
+                                    type="text" 
+                                    class="form-control form-control-sm w-50" 
+                                    placeholder="Search treks by name/location..." 
+                                    v-model="trekSearchQuery"
+                                />
+                                <button class="btn btn-primary btn-sm text-nowrap" @click="openTrekModal(null)">
+                                    <i class="bi bi-plus-circle me-1"></i> Add New Trek
+                                </button>
+                            </div>
                         </div>
                         <div class="table-responsive">
                             <table class="table align-middle table-hover">
@@ -113,7 +121,7 @@ export default {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr v-for="trek in treks" :key="trek.id">
+                                    <tr v-for="trek in filteredTreks" :key="trek.id">
                                         <td><strong>{{ trek.name }}</strong></td>
                                         <td>{{ trek.location }}</td>
                                         <td>
@@ -156,9 +164,17 @@ export default {
                     <div class="tab-pane fade" id="staff" role="tabpanel">
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <h5 class="mb-0 fw-bold text-secondary">Trek Guides / Staff</h5>
-                            <button class="btn btn-primary btn-sm" @click="openStaffModal">
-                                <i class="bi bi-person-plus me-1"></i> Register New Staff
-                            </button>
+                            <div class="d-flex gap-2 w-50 justify-content-end">
+                                <input 
+                                    type="text" 
+                                    class="form-control form-control-sm w-50" 
+                                    placeholder="Search staff by name/email..." 
+                                    v-model="staffSearchQuery"
+                                />
+                                <button class="btn btn-primary btn-sm text-nowrap" @click="openStaffModal">
+                                    <i class="bi bi-person-plus me-1"></i> Register New Staff
+                                </button>
+                            </div>
                         </div>
                         <div class="table-responsive">
                             <table class="table align-middle table-hover">
@@ -172,7 +188,7 @@ export default {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr v-for="member in staffList" :key="member.id">
+                                    <tr v-for="member in filteredStaff" :key="member.id">
                                         <td><strong>{{ member.name }}</strong></td>
                                         <td>{{ member.email }}</td>
                                         <td>{{ member.contact || 'N/A' }}</td>
@@ -183,14 +199,14 @@ export default {
                                         </td>
                                         <td>
                                             <button 
-                                                :class="member.is_active ? 'btn btn-outline-danger btn-sm' : 'btn btn-outline-success btn-sm'"
+                                                :class="member.is_active ? 'btn btn-outline-danger btn-sm me-1' : 'btn btn-outline-success btn-sm me-1'"
                                                 @click="toggleUserStatus(member.id)"
                                             >
                                                 {{ member.is_active ? 'Deactivate' : 'Activate' }}
                                             </button>
                                         </td>
                                     </tr>
-                                    <tr v-if="staffList.length === 0">
+                                    <tr v-if="filteredStaff.length === 0">
                                         <td colspan="5" class="text-center text-muted py-4">No staff members registered.</td>
                                     </tr>
                                 </tbody>
@@ -232,7 +248,7 @@ export default {
                                         </td>
                                         <td>
                                             <button 
-                                                :class="trekker.is_active ? 'btn btn-outline-danger btn-sm' : 'btn btn-outline-success btn-sm'"
+                                                :class="trekker.is_active ? 'btn btn-outline-danger btn-sm me-1' : 'btn btn-outline-success btn-sm me-1'"
                                                 @click="toggleUserStatus(trekker.id)"
                                             >
                                                 {{ trekker.is_active ? 'Deactivate' : 'Activate' }}
@@ -249,7 +265,18 @@ export default {
 
                     <!-- Bookings Tab -->
                     <div class="tab-pane fade" id="bookings" role="tabpanel">
-                        <h5 class="mb-3 fw-bold text-secondary">Booking Requests & Payments</h5>
+                        <div class="d-flex align-items-center justify-content-between mb-3">
+                            <h5 class="mb-0 fw-bold text-secondary">Booking Requests</h5>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-outline-primary btn-sm rounded-pill px-3" @click="triggerDailyReminders">
+                                    <i class="bi bi-bell-fill me-1"></i> Daily Reminders
+                                </button>
+                                <button class="btn btn-outline-success btn-sm rounded-pill px-3" @click="triggerMonthlyReport">
+                                    <i class="bi bi-file-earmark-pdf-fill me-1"></i> Monthly Report
+                                </button>
+                            </div>
+                        </div>
+
                         <div class="table-responsive">
                             <table class="table align-middle table-hover">
                                 <thead class="table-light">
@@ -260,7 +287,6 @@ export default {
                                         <th>User Email</th>
                                         <th>Booking Date</th>
                                         <th>Booking Status</th>
-                                        <th>Payment Status</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -275,14 +301,9 @@ export default {
                                                 {{ b.status }}
                                             </span>
                                         </td>
-                                        <td>
-                                            <span :class="getPaymentStatusBadge(b.payment_status)">
-                                                {{ b.payment_status }}
-                                            </span>
-                                        </td>
                                     </tr>
                                     <tr v-if="bookings.length === 0">
-                                        <td colspan="7" class="text-center text-muted py-4">No bookings made yet.</td>
+                                        <td colspan="6" class="text-center text-muted py-4">No bookings made yet.</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -342,11 +363,11 @@ export default {
                                 <div class="row mb-3">
                                     <div class="col">
                                         <label class="form-label fw-semibold">Start Date</label>
-                                        <input type="date" class="form-control" v-model="trekForm.start_date" required/>
+                                        <input type="date" class="form-control" v-model="trekForm.start_date" :min="todayDate" required/>
                                     </div>
                                     <div class="col">
                                         <label class="form-label fw-semibold">End Date</label>
-                                        <input type="date" class="form-control" v-model="trekForm.end_date" required/>
+                                        <input type="date" class="form-control" v-model="trekForm.end_date" :min="trekForm.start_date || todayDate" required/>
                                     </div>
                                 </div>
                                 <div class="mb-3">
@@ -414,6 +435,8 @@ export default {
             trekkers: [],
             bookings: [],
             trekkerSearchQuery: "",
+            trekSearchQuery: "",
+            staffSearchQuery: "",
             alert: {
                 message: "",
                 type: "success",
@@ -441,12 +464,35 @@ export default {
         };
     },
     computed: {
+        todayDate() {
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const dd = String(today.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
+        },
         filteredTrekkers() {
             const query = this.trekkerSearchQuery.toLowerCase().trim();
             if (!query) return this.trekkers;
             return this.trekkers.filter(t => 
                 t.name.toLowerCase().includes(query) || 
                 t.email.toLowerCase().includes(query)
+            );
+        },
+        filteredTreks() {
+            const query = this.trekSearchQuery.toLowerCase().trim();
+            if (!query) return this.treks;
+            return this.treks.filter(t => 
+                t.name.toLowerCase().includes(query) || 
+                t.location.toLowerCase().includes(query)
+            );
+        },
+        filteredStaff() {
+            const query = this.staffSearchQuery.toLowerCase().trim();
+            if (!query) return this.staffList;
+            return this.staffList.filter(s => 
+                s.name.toLowerCase().includes(query) || 
+                s.email.toLowerCase().includes(query)
             );
         }
     },
@@ -524,12 +570,6 @@ export default {
             if (status === "BOOKED") return "badge bg-success";
             if (status === "CANCELLED") return "badge bg-danger";
             return "badge bg-info";
-        },
-        getPaymentStatusBadge(status) {
-            if (status === "PAID") return "badge bg-success";
-            if (status === "PENDING") return "badge bg-warning text-dark";
-            if (status === "FAILED") return "badge bg-danger";
-            return "badge bg-secondary";
         },
         formatDate(dateStr) {
             if (!dateStr) return "";
@@ -656,6 +696,50 @@ export default {
                 }
             } catch (err) {
                 this.showAlert(err.message, "danger");
+            }
+        },
+        async triggerDailyReminders() {
+            try {
+                const headers = this.getHeaders();
+                const response = await fetch("/api/admin/trigger-daily-reminders", {
+                    method: "POST",
+                    headers
+                });
+                let data = {};
+                try {
+                    data = await response.json();
+                } catch (e) {
+                    data = { message: "Internal server error. Make sure Redis & Celery are running." };
+                }
+                if (response.ok) {
+                    this.showAlert(data.message, "success");
+                } else {
+                    this.showAlert(data.message, "danger");
+                }
+            } catch (err) {
+                this.showAlert("Error: " + err.message + ". Make sure Redis & Celery are running.", "danger");
+            }
+        },
+        async triggerMonthlyReport() {
+            try {
+                const headers = this.getHeaders();
+                const response = await fetch("/api/admin/trigger-monthly-report", {
+                    method: "POST",
+                    headers
+                });
+                let data = {};
+                try {
+                    data = await response.json();
+                } catch (e) {
+                    data = { message: "Internal server error. Make sure Redis & Celery are running." };
+                }
+                if (response.ok) {
+                    this.showAlert(data.message, "success");
+                } else {
+                    this.showAlert(data.message, "danger");
+                }
+            } catch (err) {
+                this.showAlert("Error: " + err.message + ". Make sure Redis & Celery are running.", "danger");
             }
         }
     }

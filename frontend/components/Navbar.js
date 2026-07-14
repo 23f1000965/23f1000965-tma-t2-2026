@@ -22,6 +22,9 @@ const Navbar = {
                         <li class="nav-item" v-if="isAuthenticated && userRole === 'STAFF'">
                             <router-link class="nav-link" to="/staff/dashboard">Staff Dashboard</router-link>
                         </li>
+                        <li class="nav-item" v-if="isAuthenticated && userRole === 'USER'">
+                            <router-link class="nav-link" to="/trekker/dashboard">Trekker Dashboard</router-link>
+                        </li>
                     </ul>
                     <!-- Authenticated View -->
                     <div class="d-flex align-items-center" v-if="isAuthenticated">

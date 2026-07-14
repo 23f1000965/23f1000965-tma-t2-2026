@@ -1,0 +1,139 @@
+# Endpoints definition 
+endpoints:
+  /api/auth/register:
+    post:
+       Register user (Trekker)
+
+  /api/auth/login:
+    post:
+       Login user (Admin/Staff/Trekker)
+
+  /api/auth/profile:
+    get:
+       Get logged-in user profile
+    put:
+       Update logged-in user profile
+
+  /api/admin/dashboard-stats:
+    get:
+       Get admin dashboard statistics
+
+  /api/admin/treks:
+    get:
+       Get all treks
+    post:
+       Create a new trek route
+
+  /api/admin/treks/{trek_id}:
+    parameters:
+      - in: path
+        name: trek_id
+        required: true
+        schema:
+          type: integer
+    get:
+       Get trek details
+    put:
+       Update trek details
+    delete:
+       Delete trek route
+
+  /api/admin/staff:
+    get:
+       Get all trek staff members
+    post:
+       Add a new trek staff member
+
+  /api/admin/treks/{trek_id}/assign-staff:
+    parameters:
+      - in: path
+        name: trek_id
+        required: true
+        schema:
+          type: integer
+    post:
+       Assign staff member to a trek
+
+  /api/admin/trekkers:
+    get:
+       Get all registered trekkers
+
+  /api/admin/users/{user_id}/toggle-status:
+    parameters:
+      - in: path
+        name: user_id
+        required: true
+        schema:
+          type: integer
+    post:
+       Toggle user active/deactivated status
+
+  /api/admin/bookings:
+    get:
+       Get all booking requests
+
+  /api/admin/trigger-daily-reminders:
+    post:
+       Manually trigger Celery daily reminders job
+
+  /api/admin/trigger-monthly-report:
+    post:
+       Manually trigger Celery monthly report job
+
+  /api/staff/treks:
+    get:
+       Get assigned treks for staff
+
+  /api/staff/treks/{trek_id}/participants:
+    parameters:
+      - in: path
+        name: trek_id
+        required: true
+        schema:
+          type: integer
+    get:
+       Get participant list for a trek
+
+  /api/staff/treks/{trek_id}:
+    parameters:
+      - in: path
+        name: trek_id
+        required: true
+        schema:
+          type: integer
+    put:
+       Update trek slots, status, and completion status
+
+  /api/trekkers/treks:
+    get:
+       Get approved/open treks with caching and filters (location, difficulty, max_duration)
+
+  /api/trekkers/bookings:
+    post:
+       Book a slot on an open trek
+    get:
+       Get trekker booking history
+
+  /api/trekkers/bookings/{booking_id}/cancel:
+    parameters:
+      - in: path
+        name: booking_id
+        required: true
+        schema:
+          type: integer
+    post:
+       Cancel a booking
+
+  /api/trekkers/bookings/export:
+    post:
+       Trigger async CSV history export
+
+  /api/tasks/{task_id}/status:
+    parameters:
+      - in: path
+        name: task_id
+        required: true
+        schema:
+          type: string
+    get:
+       Get status and download URL of an export task

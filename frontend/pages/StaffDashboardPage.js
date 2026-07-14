@@ -14,41 +14,35 @@ const StaffDashboardPage = {
             <!-- Stats Summary Cards -->
             <div class="row g-3 mb-4">
                 <div class="col-md-4">
-                    <div class="card border-0 shadow-sm h-100">
-                        <div class="card-body d-flex align-items-center justify-content-between p-4">
+                    <div class="card border-0 shadow-sm bg-primary text-white h-100">
+                        <div class="card-body d-flex align-items-center justify-content-between">
                             <div>
-                                <h6 class="text-muted fw-semibold text-uppercase mb-2" style="font-size: 0.8rem; letter-spacing: 1px;">Assigned Treks</h6>
-                                <h3 class="fw-bold text-dark mb-0">{{ stats.totalTreks }}</h3>
+                                <h6 class="text-uppercase mb-1 opacity-75 small">Assigned Treks</h6>
+                                <h3 class="mb-0 fw-bold">{{ stats.totalTreks }}</h3>
                             </div>
-                            <div class="bg-indigo-light p-3 rounded-3 text-indigo">
-                                <i class="bi bi-signpost-split fs-3"></i>
-                            </div>
+                            <i class="bi bi-signpost-split fs-1 opacity-50"></i>
                         </div>
                     </div>
                 </div>
                 <div class="col-md-4">
-                    <div class="card border-0 shadow-sm h-100">
-                        <div class="card-body d-flex align-items-center justify-content-between p-4">
+                    <div class="card border-0 shadow-sm bg-success text-white h-100">
+                        <div class="card-body d-flex align-items-center justify-content-between">
                             <div>
-                                <h6 class="text-muted fw-semibold text-uppercase mb-2" style="font-size: 0.8rem; letter-spacing: 1px;">Total Participants</h6>
-                                <h3 class="fw-bold text-dark mb-0">{{ stats.totalParticipants }}</h3>
+                                <h6 class="text-uppercase mb-1 opacity-75 small">Total Participants</h6>
+                                <h3 class="mb-0 fw-bold">{{ stats.totalParticipants }}</h3>
                             </div>
-                            <div class="bg-purple-light p-3 rounded-3 text-purple">
-                                <i class="bi bi-people fs-3"></i>
-                            </div>
+                            <i class="bi bi-people fs-1 opacity-50"></i>
                         </div>
                     </div>
                 </div>
                 <div class="col-md-4">
-                    <div class="card border-0 shadow-sm h-100">
-                        <div class="card-body d-flex align-items-center justify-content-between p-4">
+                    <div class="card border-0 shadow-sm bg-info text-white h-100">
+                        <div class="card-body d-flex align-items-center justify-content-between">
                             <div>
-                                <h6 class="text-muted fw-semibold text-uppercase mb-2" style="font-size: 0.8rem; letter-spacing: 1px;">Active Treks</h6>
-                                <h3 class="fw-bold text-dark mb-0">{{ stats.activeTreks }}</h3>
+                                <h6 class="text-uppercase mb-1 opacity-75 small">Active Treks</h6>
+                                <h3 class="mb-0 fw-bold">{{ stats.activeTreks }}</h3>
                             </div>
-                            <div class="bg-success-light p-3 rounded-3 text-success">
-                                <i class="bi bi-check2-circle fs-3"></i>
-                            </div>
+                            <i class="bi bi-check2-circle fs-1 opacity-50"></i>
                         </div>
                     </div>
                 </div>
@@ -194,8 +188,6 @@ const StaffDashboardPage = {
                                                 <option value="OPEN">OPEN</option>
                                                 <option value="CLOSED">CLOSED</option>
                                                 <option value="COMPLETED">COMPLETED</option>
-                                                <option value="APPROVED">APPROVED</option>
-                                                <option value="PENDING">PENDING</option>
                                             </select>
                                         </div>
                                         <div class="col-12 mt-3 d-grid">

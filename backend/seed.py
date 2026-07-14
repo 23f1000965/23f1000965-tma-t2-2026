@@ -27,7 +27,7 @@ def seed_db():
         )
         db.session.add(admin)
         db.session.commit()
-        print("Database initialized and default Admin user seeded successfully.")
+        print(" Admin user created.")
 
 if __name__ == "__main__":
     seed_db()

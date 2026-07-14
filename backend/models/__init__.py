@@ -16,7 +16,6 @@ class User(db.Model):
     role = db.Column(db.Enum("ADMIN", "STAFF", "USER", name="user_role"), nullable=False, index=True)
     contact = db.Column(db.String(30))
     is_active = db.Column(db.Boolean, default=True, nullable=False)
-    is_blacklisted = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
@@ -37,8 +36,8 @@ class User(db.Model):
             "role": self.role,
             "contact": self.contact,
             "is_active": self.is_active,
-            "is_blacklisted": self.is_blacklisted,
         }
+
 
 
 class Trek(db.Model):
